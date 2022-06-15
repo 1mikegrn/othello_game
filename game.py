@@ -1,11 +1,15 @@
 import os
+import re
+import time
 
+import functools
 import itertools
 from collections import Counter
 
 EMPTY = "-"
 
-def print_grid(grid):
+def print_game(game):
+    grid = game.grid
     x, y = grid.shape
     string = "  "
     string += " ".join([str(i) for i in range(x)]) + "\n"
@@ -14,10 +18,9 @@ def print_grid(grid):
     print(string)
 
 def parse_move(move):
-    move = move.split()
-    if len(move) != 2:
-        return None
-    return tuple(map(int, move))
+    if search := re.search(r"(\d+)[,]? .*(\d+)", move):
+        return (int(search.group(1)), int(search.group(2)))
+    return None
 
 def walk(player, piece, grid):
     x, y = piece
@@ -41,8 +44,8 @@ def move_on_board(grid, move):
     except IndexError:
         return None
 
-def same_color(grid, move, player):
-    if move_on_board(grid, move) == player.name:
+def empty(grid, move):
+    if move_on_board(grid, move) == EMPTY:
         return True
     return False
 
@@ -51,7 +54,7 @@ def playable(grid, player, move, piece):
         return None
     if not move_on_board(grid, move):
         return None
-    if same_color(grid, move, player):
+    if not empty(grid, move):
         return None
     delta = tuple(b-a for a, b in zip(move, piece))
     if chain := walks_to_player(player, grid, move, delta):
@@ -63,9 +66,9 @@ def walks_to_player(player, grid, move, delta):
     while True:
         move = tuple(a+b for a,b in zip(move, delta))
         if not (spot := move_on_board(grid, move)):
-            return False
+            return None
         if spot == EMPTY:
-            return False
+            return None
         elif spot != player.name:
             chain.append(move)
             continue
@@ -115,12 +118,23 @@ class Game:
     def current_player(self):
         return self.player.name
 
+    @functools.lru_cache
     def possible_moves(self):
-        return {key: val for key, val in possible_moves(self.player, self.opponent, self.grid)}
+        res = {}
+        for key, val in possible_moves(self.player, self.opponent, self.grid):
+            res.setdefault(key, []).extend(val)
+        return res
 
     def next_player(self, skip=False):
         self.player.skip = skip
         self.player, self.opponent = self.opponent, self.player
+
+    def play(self, move):
+        moves = self.possible_moves()
+        self.add(move)
+        self.capture(moves[move])
+        self.possible_moves.cache_clear()
+        self.next_player()
 
     def add(self, move):
         self.player.add(move)
@@ -132,7 +146,7 @@ class Game:
             self.opponent.remove(point)
 
     def print(self):
-        print_grid(self.grid)
+        print_game(self.grid)
 
 
 class Helper:
@@ -161,7 +175,7 @@ def main():
             continue
 
         with Helper(game, moves):
-            game.print()
+            print_game(game)
 
         move = input(
             f"player '{game.current_player()}': "
@@ -171,13 +185,12 @@ def main():
 
         if move not in moves:
             print("this is an invalid move. Please try again.")
+            time.sleep(1.5)
             continue
 
-        game.add(move)
-        game.capture(moves[move])
-        game.next_player()
+        game.play(move)
 
-    print("\n ### GAME OVER ### \n")
+    print("\n### GAME OVER ### \n")
 
     _iter = itertools.chain.from_iterable(game.grid.grid)
     tally = Counter(_iter)
