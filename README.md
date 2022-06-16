@@ -1,3 +1,8 @@
+# Othello
+
+### to play
+python game.py
+
 RULES:
 If an white piece is sandwiched between two pieces of the black color, that piece becomes black as well. 
     It can be for any # of pieces that are sandwiched. 
